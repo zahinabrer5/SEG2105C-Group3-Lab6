@@ -2,6 +2,9 @@ package main
 
 import (
     "fmt"
+    "io"
+    "net/http"
+    "sync"
 )
 
 // Structure to store results
@@ -13,14 +16,31 @@ type FetchResult struct {
 }
 
 // Worker function
-func worker(id int, jobs <-chan string, results chan<- FetchResult) {
+func worker(wg *sync.WaitGroup, id int, jobs <-chan string, results chan<- FetchResult) {
     defer wg.Done()
-    // TODO: fetch the URL
-    // TODO: send Result struct to results channel
-    // hint: use resp, err := http.Get(url)
+
+    for url := range jobs {
+        // fetch the URL
+        resp, err := http.Get(url)
+        if err != nil {
+            results <- FetchResult{URL: url, StatusCode: 0, Size: 0, Error: err}
+            continue
+        }
+        body, err := io.ReadAll(resp.Body)
+        resp.Body.Close()
+
+        // send Result struct to results channel
+        size := 0
+        if err == nil {
+            size = len(body)
+        }
+        results <- FetchResult{URL: url, StatusCode: resp.StatusCode, Size: size, Error: err}
+    }
 }
 
 func main() {
+    var wg sync.WaitGroup
+
     urls := []string{
         "https://example.com",
         "https://golang.org",
@@ -29,16 +49,31 @@ func main() {
         "https://httpbin.org/get",
     }
 
-    numWorkers := 3
+    numWorkers := 5
 
     jobs := make(chan string, len(urls))
     results := make(chan FetchResult, len(urls))
 
-    // TODO: Start workers
+    // Start workers
+    for w := 1; w <= numWorkers; w++ {
+        wg.Add(1)
+        go worker(&wg, w, jobs, results)
+    }
 
-    // TODO: Send jobs
+    // Send jobs
+    for j := 1; j <= len(urls); j++ {
+        jobs <- urls[j-1]
+    }
+    close(jobs)
 
-    // TODO: Collect results
+    wg.Wait()
+    // Collect results
+    fmt.Println("Fetching URLs concurrently using worker pool...")
+    fmt.Println()
+    for i := 1; i <= len(urls); i++ {
+        result := <- results
+        fmt.Printf("%s | Status: %d | Size: %d bytes\n", result.URL, result.StatusCode, result.Size)
+    }
 
     fmt.Println("\nScraping complete!")
 }
