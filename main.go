@@ -17,7 +17,7 @@ type FetchResult struct {
 
 // Worker function
 func worker(wg *sync.WaitGroup, id int, jobs <-chan string, results chan<- FetchResult) {
-    defer wg.Done()
+    defer wg.Done() // wg.Add(-1)
 
     for url := range jobs {
         // fetch the URL
@@ -31,10 +31,12 @@ func worker(wg *sync.WaitGroup, id int, jobs <-chan string, results chan<- Fetch
 
         // send Result struct to results channel
         size := 0
+        statusCode := 0
         if err == nil {
             size = len(body)
+            statusCode = resp.StatusCode
         }
-        results <- FetchResult{URL: url, StatusCode: resp.StatusCode, Size: size, Error: err}
+        results <- FetchResult{URL: url, StatusCode: statusCode, Size: size, Error: err}
     }
 }
 
